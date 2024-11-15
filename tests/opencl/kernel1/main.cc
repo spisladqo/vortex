@@ -62,6 +62,19 @@ static int read_kernel_file(const char *filename, uint8_t **data,
   return 0;
 }
 
+static void sgemm_cpu(float *C, const float *A, const float *B, int M, int N,
+                      int K) {
+  for (int m = 0; m < M; ++m) {
+    for (int n = 0; n < N; ++n) {
+      float acc = 0;
+      for (int k = 0; k < K; ++k) {
+        acc += A[k * M + m] * B[n * K + k];
+      }
+      C[n * M + m] = acc;
+    }
+  }
+}
+
 cl_platform_id platform_id = NULL;
 cl_device_id device_id = NULL;
 cl_context context = NULL;
@@ -240,7 +253,24 @@ int main(int argc, char **argv) {
                                M * N * sizeof(float), C, 0, NULL, NULL));
   CL_CHECK(clFinish(command_queue));
 
-  printf("PASSED!\n");
+  // verify results
+  printf("Verify result\n");
+  float *C_cpu = (float *)malloc(M * N * sizeof(float));
+  if (C_cpu == NULL) {
+    printf("Not enough memory");
+    cleanup();
+    return -1;
+  }
+  sgemm_cpu(C_cpu, A, B, M, N, K);
+  int errors = 0;
+
+  for (size_t i = 0; i < size_t(M * N); i++)
+    if (C_cpu[i] != C[i])
+      errors++;
+  if (errors != 0)
+    printf("FAILED! - %d errors\n", errors);
+  else
+    printf("PASSED!\n");
 
   // free resureses
   cleanup();
@@ -248,6 +278,6 @@ int main(int argc, char **argv) {
   free(B);
   free(C);
   free(log);
-  return 0;
+  free(C_cpu);
+  return errors;
 }
-
