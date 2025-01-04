@@ -17,6 +17,7 @@ FROM ubuntu:20.04
 # Set non-interactive installation to avoid user input during build
 ARG DEBIAN_FRONTEND=noninteractive
 
+# Install necessary dependencies and upgrade installed components
 # Update and install necessary dependencies
 RUN apt-get update && apt-get install -y \
     software-properties-common \
@@ -30,6 +31,9 @@ RUN apt-get update && apt-get install -y \
 
 # upgrade installed components
 RUN apt-get upgrade && apt-get update
+
+# temporary until remote dependency script gets updated
+RUN apt-get install -y cmake
 
 # Clone the Vortex repository
 RUN git clone --depth=1 --recursive https://github.com/vortexgpgpu/vortex.git /vortex
