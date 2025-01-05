@@ -76,7 +76,7 @@ def perf (run_params: run, path_to_output_file: str) -> pd.DataFrame:
         for part in parts:
             matches = re.findall(pattern, part)
             for key, value in matches:
-                perf_dict[key] = +float(value)
+                perf_dict[key] =+ float(value)
         # check for errors
         if result != 0:
             if "FAILED" in line: 
@@ -135,7 +135,7 @@ arg128 = {
     "K": 128
 }
 
-kernels = ["kernel1", "kernel2", "kernel3", "kernel4"]
+kernels = ["kernel1", "kernel2", "kernel3"]
 drivers = ["simx", "rtlsim"]
 args = [arg32, arg128]
 
@@ -148,42 +148,43 @@ stats2 = "IPC"
 THREADS = 16
 WARPS = [2, 8] # 32 / 2 = 16, 128 / 8 = 16, so TS = 4 fits perfectly
 CORES = 2
+TESTS_NUM = 20
 
+for N in range(TESTS_NUM):
+    for arg, W in zip(args, WARPS):
+        for driver in drivers:
+            data_frames = []
+            for kernel in kernels:
+                run_p = []
+                if kernel == "kernel3":
+                    T = int(THREADS / WORKPERTHREAD)
+                elif kernel == "kernel4":
+                    T = int(THREADS / WIDTH)
+                else:
+                    T = THREADS
 
-for arg, W in zip(args, WARPS):
-    for driver in drivers:
-        data_frames = []
-        for kernel in kernels:
-            run_p = []
-            if kernel == "kernel3":
-                T = int(THREADS / WORKPERTHREAD)
-            elif kernel == "kernel4":
-                T = int(THREADS / WIDTH)
-            else:
-                T = THREADS
-
-            C = CORES
-            arch_p = arch(threads=T, cores=C, warps=W)
-            run_p.append(run(arch_p, kernel=kernel, driver=driver, args=arg, perf=2)) 
+                C = CORES
+                arch_p = arch(threads=T, cores=C, warps=W)
+                run_p.append(run(arch_p, kernel=kernel, driver=driver, args=arg, perf=2)) 
             
-            if arg == arg32:
-                n = 32
-            elif arg == arg128:
-                n = 128
+                if arg == arg32:
+                    n = 32
+                elif arg == arg128:
+                    n = 128
 
-            # run all kernels and collect statistic in data frame
-            output_file = f"{output_dir}/output_{driver}_n{n}_{kernel}_TS{TILESIZE}_WPT{WORKPERTHREAD}_WID{WIDTH}_t{THREADS}w{W}_c{CORES}.txt"
-            for params in tqdm(run_p):
-                data_frames.append(perf(params, output_file))
+                # run all kernels and collect statistic in data frame
+                output_file = f"{output_dir}/output_{driver}_n{n}_{kernel}_TS{TILESIZE}_WPT{WORKPERTHREAD}_WID{WIDTH}_t{THREADS}w{W}_c{CORES}.txt"
+                for params in tqdm(run_p):
+                    data_frames.append(perf(params, output_file))
         
-        data_frame = pd.concat(data_frames, ignore_index=True)
-        # draw graph based on the recived statistic
-        if driver == "simx":
-            sim_type = "Cycle-approximate"
-        elif driver == "rtlsim":
-            sim_type = "RTL"
+            data_frame = pd.concat(data_frames, ignore_index=True)
+            # draw graph based on the recived statistic
+            if driver == "simx":
+                sim_type = "Cycle-approximate"
+            elif driver == "rtlsim":
+                sim_type = "RTL"
 
-        draw(data_frame, "kernel", stats1, "Memory requests", f"Number of memory requests, {sim_type} simulation",
+            draw(data_frame, "kernel", stats1, "Memory requests", f"Number of memory requests, {sim_type} simulation",
             f"{graphics_dir}/mem_graph_{driver}_n{n}_TS{TILESIZE}_WPT{WORKPERTHREAD}_WID{WIDTH}_t{THREADS}_w{W}_c{CORES}.png")
-        draw(data_frame, "kernel", stats2, "",  f"Instructions per cycle, {sim_type} simulation",
+            draw(data_frame, "kernel", stats2, "",  f"Instructions per cycle, {sim_type} simulation",
             f"{graphics_dir}/ipc_graph_{driver}_n{n}_TS{TILESIZE}_WPT{WORKPERTHREAD}_WID{WIDTH}_t{THREADS}_w{W}_c{CORES}.png")
