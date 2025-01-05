@@ -65,7 +65,10 @@ def perf (run_params: run, path_to_output_file: str) -> pd.DataFrame:
     perf_stat = ""
     perf_dict = {}
 
-    pattern =  r'(?:core\d+: )?([a-zA-Z0-9\.\-_+]+(?: [a-zA-Z0-9\.\-_+]+)*)=(\d+\.?\d*)'
+    # matches all string currently starting with "PERF", such as
+    # "core0: lmem reads=2134241" and "instrs=123, cycles=123, IPC=1.0"
+    pattern =  r"(?:core\d+: )?([a-zA-Z0-9\.\-_+]+(?: [a-zA-Z0-9\.\-_+]+)*)=(\d+\.?\d*)"
+
     for line in lines:
         if not line.startswith("PERF:"):
             continue
@@ -87,34 +90,36 @@ def perf (run_params: run, path_to_output_file: str) -> pd.DataFrame:
     # write result to data frame
     run_result = pd.DataFrame([{"kernel": run_params.kernel[-1], "driver": run_params.driver, "cores": run_params.arch.cores, 
                 "warps": run_params.arch.warps, "threads": run_params.arch.threads, "M": run_params.args["M"], 
-                "N": run_params.args["N"], "K": run_params.args["K"], "instrs": perf_dict["instrs"], "cycles": perf_dict["cycles"],
-                "IPC": perf_dict["IPC"], "lmem reads": perf_dict["lmem reads"], "lmem writes": perf_dict["lmem writes"],
-                "memory requests": perf_dict["memory requests"], "error": error_message}])
+                                "N": run_params.args["N"], "K": run_params.args["K"], "instrs": perf_dict["instrs"], "cycles": perf_dict["cycles"], "IPC": perf_dict["IPC"], "lmem reads": perf_dict["lmem reads"], "lmem writes": perf_dict["lmem writes"], "local memory requests": perf_dict["lmem reads"] + perf_dict["lmem writes"], "global memory requests": perf_dict["memory requests"], "error": error_message}])
     return run_result
 
 def draw (data_frame: pd.DataFrame, x_label: str, y_label: str, title: str, path: str):
     data_frame.plot(kind = "bar", x = x_label, y = y_label)
     plt.title(title)
     plt.xlabel(x_label)
-    plt.ylabel(y_label)
+    plt.ylabel("Number of memory accesses")
     plt.savefig(path)
+
+TILESIZE = 8
+WORKPERTHREAD = 4
+WIDTH = 4
 
 # create common.h files for each kernel
 params1 = {
-    tile_size: 4
+    tile_size: TILESIZE
 }
 create_common_h(params1, "kernel1")
 create_common_h(params1, "kernel2")
 
 params3 = {
-    tile_size: 4,
-    work_per_thread: 4
+    tile_size: TILESIZE,
+    work_per_thread: WORKPERTHREAD
 }
 create_common_h(params3, "kernel3")
 
 params4 = {
-    tile_size: 4,
-    width: 4
+    tile_size: TILESIZE,
+    width: WIDTH 
 }
 create_common_h(params4, "kernel4")
 
@@ -136,32 +141,34 @@ args = [arg32, arg128]
 arch_p = arch(threads=16, cores=2, warps=4)
 
 j_stat_dir = f"{path_to_vortex}/tests/opencl/j_stat"
-output_file = f"{j_stat_dir}/output.txt"
+output_dir = f"{j_stat_dir}/outputs"
 graphics_dir = f"{j_stat_dir}/graphics"
-stats = ["lmem reads", "lmem writes", "memory requests"]
+stats = ["local memory requests", "global memory requests"]
 
 for arg in args:
-    run_p = []
-    for kernel in kernels:
-        for driver in drivers:
-            run_p.append(run(arch_p, kernel=kernel, driver=driver, args=arg, perf=2))
+    for driver in drivers:
+        run_p = []
+        for kernel in kernels:
+            run_p.append(run(arch_p, kernel=kernel, driver=driver, args=arg, perf=2)) 
+            
+            if arg == arg32:
+                n = 32
+            elif arg == arg128:
+                n = 128
 
-    # run all kernels and collect statistic in data frame
-    data_frames = []
-    for params in tqdm(run_p):
-        data_frames.append(perf(params, output_file))
-    data_frame = pd.concat(data_frames, ignore_index=True)
+            # run all kernels and collect statistic in data frame
+            output_file = f"{output_dir}/output_{driver}_n{n}_{kernel}_TS{TILESIZE}_WPT{WORKPERTHREAD}_WID{WIDTH}.txt"
+            data_frames = []
+            for params in tqdm(run_p):
+                data_frames.append(perf(params, output_file))
+        
+            data_frame = pd.concat(data_frames, ignore_index=True)
 
-    # draw graph based on the recived statistic
-    if arg == arg32:
-        n = 32
-    elif arg == arg128:
-        n = 128
+        # draw graph based on the recived statistic
+        if driver == "simx":
+            sim_type = "Cycle-approximate"
+        elif driver == "rtlsim":
+            sim_type = "RTL"
 
-    if driver == "simx":
-        sim_type = "Cycle-approximate"
-    elif driver == "rtlsim":
-        sim_type = "RTL"
-
-    draw(data_frame, "kernel", stats, f"Number of memory requests, {sim_type} simulation",
-         f"{graphics_dir}/graph_{driver}_n{n}.png")
+        draw(data_frame, "kernel", stats, f"Number of memory requests, {sim_type} simulation",
+                f"{graphics_dir}/graph_{driver}_n{n}_TS{TILESIZE}_WPT{WORKPERTHREAD}_WID{WIDTH}.png")
