@@ -93,14 +93,14 @@ def perf (run_params: run, path_to_output_file: str) -> pd.DataFrame:
                                 "N": run_params.args["N"], "K": run_params.args["K"], "instrs": perf_dict["instrs"], "cycles": perf_dict["cycles"], "IPC": perf_dict["IPC"], "lmem reads": perf_dict["lmem reads"], "lmem writes": perf_dict["lmem writes"], "local memory requests": perf_dict["lmem reads"] + perf_dict["lmem writes"], "global memory requests": perf_dict["memory requests"], "error": error_message}])
     return run_result
 
-def draw (data_frame: pd.DataFrame, x_label: str, y_label: str, title: str, path: str):
-    data_frame.plot(kind = "bar", x = x_label, y = y_label)
+def draw (data_frame: pd.DataFrame, x_label: str, y: str, y_label: str, title: str, path: str):
+    data_frame.plot(kind = "bar", x = x_label, y = y)
     plt.title(title)
     plt.xlabel(x_label)
-    plt.ylabel("Number of memory accesses")
+    plt.ylabel(y_label)
     plt.savefig(path)
 
-TILESIZE = 8
+TILESIZE = 4
 WORKPERTHREAD = 4
 WIDTH = 4
 
@@ -138,17 +138,32 @@ arg128 = {
 kernels = ["kernel1", "kernel2", "kernel3", "kernel4"]
 drivers = ["simx", "rtlsim"]
 args = [arg32, arg128]
-arch_p = arch(threads=16, cores=2, warps=4)
 
 j_stat_dir = f"{path_to_vortex}/tests/opencl/j_stat"
 output_dir = f"{j_stat_dir}/outputs"
 graphics_dir = f"{j_stat_dir}/graphics"
-stats = ["local memory requests", "global memory requests"]
+stats1 = ["local memory requests", "global memory requests"]
+stats2 = "IPC"
 
-for arg in args:
+THREADS = 16
+WARPS = [2, 8] # 32 / 2 = 16, 128 / 8 = 16, so TS = 4 fits perfectly
+CORES = 2
+
+
+for arg, W in zip(args, WARPS):
     for driver in drivers:
-        run_p = []
+        data_frames = []
         for kernel in kernels:
+            run_p = []
+            if kernel == "kernel3":
+                T = int(THREADS / WORKPERTHREAD)
+            elif kernel == "kernel4":
+                T = int(THREADS / WIDTH)
+            else:
+                T = THREADS
+
+            C = CORES
+            arch_p = arch(threads=T, cores=C, warps=W)
             run_p.append(run(arch_p, kernel=kernel, driver=driver, args=arg, perf=2)) 
             
             if arg == arg32:
@@ -157,18 +172,18 @@ for arg in args:
                 n = 128
 
             # run all kernels and collect statistic in data frame
-            output_file = f"{output_dir}/output_{driver}_n{n}_{kernel}_TS{TILESIZE}_WPT{WORKPERTHREAD}_WID{WIDTH}.txt"
-            data_frames = []
+            output_file = f"{output_dir}/output_{driver}_n{n}_{kernel}_TS{TILESIZE}_WPT{WORKPERTHREAD}_WID{WIDTH}_t{THREADS}w{W}_c{CORES}.txt"
             for params in tqdm(run_p):
                 data_frames.append(perf(params, output_file))
         
-            data_frame = pd.concat(data_frames, ignore_index=True)
-
+        data_frame = pd.concat(data_frames, ignore_index=True)
         # draw graph based on the recived statistic
         if driver == "simx":
             sim_type = "Cycle-approximate"
         elif driver == "rtlsim":
             sim_type = "RTL"
 
-        draw(data_frame, "kernel", stats, f"Number of memory requests, {sim_type} simulation",
-                f"{graphics_dir}/graph_{driver}_n{n}_TS{TILESIZE}_WPT{WORKPERTHREAD}_WID{WIDTH}.png")
+        draw(data_frame, "kernel", stats1, "Memory requests", f"Number of memory requests, {sim_type} simulation",
+            f"{graphics_dir}/mem_graph_{driver}_n{n}_TS{TILESIZE}_WPT{WORKPERTHREAD}_WID{WIDTH}_t{THREADS}_w{W}_c{CORES}.png")
+        draw(data_frame, "kernel", stats2, "",  f"Instructions per cycle, {sim_type} simulation",
+            f"{graphics_dir}/ipc_graph_{driver}_n{n}_TS{TILESIZE}_WPT{WORKPERTHREAD}_WID{WIDTH}_t{THREADS}_w{W}_c{CORES}.png")
