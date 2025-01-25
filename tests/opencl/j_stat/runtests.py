@@ -61,13 +61,14 @@ def create_common_h (params: dict, kernel_name: str):
 
 def runtest(run_params: run, path_to_output_file: str) -> int:
     perf = f"--perf={run_params.perf}"
+    run_args = f"-n{run_params.msize}"
     vortex = f"--warps={run_params.arch.warps} --cores={run_params.arch.cores} --threads={run_params.arch.threads}"
-    if run_params.kernel == "simx" or run_params.kernel == "rtlsim":
-        command = f"cd {path_to_vortex}/build && ./ci/blackbox.sh {vortex} {perf} --driver={run_params.driver} --app={run_params.kernel} --args={run_params.msize}"
-    elif run_params.kernel == "xrt":
+    if run_params.driver == "simx" or run_params.driver == "rtlsim":
+        command = f"cd {path_to_vortex}/build && ./ci/blackbox.sh {vortex} {perf} --driver={run_params.driver} --app={run_params.kernel} --args={run_args}"
+    elif run_params.driver == "xrt":
         fpga_data = run_params.fpga_data
         fpga_pref = f"FPGA_BIN_DIR={path_to_vortex}/hw/syn/xilinx/xrt/{fpga_data.dirpref}_{fpga_data.platform}_{fpga_data.sim}/bin TARGET={fpga_data.sim} PLATFORM={fpga_data.platform}"
-        command = f"{fpga_pref} ./ci/blackbox.sh {perf} --driver={run_params.driver} --app={run_params.kernel} --args={run_params.msize}"
+        command = f"cd {path_to_vortex}/build && {fpga_pref} ./ci/blackbox.sh {perf} --driver={run_params.driver} --app={run_params.kernel} --args={run_args}"
     print(command)
     result = subprocess.run(f"{command} >> {path_to_output_file}", shell=True)
     return result.returncode
@@ -90,10 +91,11 @@ def collect(run_params: run, path_to_output_file: str) -> pd.DataFrame:
                 for key, value in matches:
                     perf_dict[key] = float(value)
         elif line.startswith("Elapsed time:"):
-            match = re.findall(r'(\S+)\s*[:]\s*(\d+)', line)
-            perf_dict["time"] = float(match)
+            matches = re.findall(r'(\S+)\s*[:]\s*(\d+)', line) # matches time: 1234
+            for key, value in matches:
+                perf_dict[key] = float(value)
         # check for errors
-        if "FAILED" in line: 
+        if "FAILED" in line:
             error_message = error_verification(run_params, line[line.find("FAILED! - "):])
         if "Error" in line:
             error_message = error_running(run_params, line[line.find("Error:"):])
@@ -103,8 +105,8 @@ def collect(run_params: run, path_to_output_file: str) -> pd.DataFrame:
         error_message = error_running(run_params, "Invalid number of cycles")
     # write result to data frame
     run_result = pd.DataFrame([{"kernel": run_params.kernel[-1], "driver": run_params.driver, "cores": run_params.arch.cores,
-                                "warps": run_params.arch.warps, "threads": run_params.arch.threads, "M": run_params.args["M"],
-                                "N": run_params.args["N"], "K": run_params.args["K"], "instrs": perf_dict["instrs"], "cycles": perf_dict["cycles"],
+                                "warps": run_params.arch.warps, "threads": run_params.arch.threads, "n": run_params.msize,
+                                "instrs": perf_dict["instrs"], "cycles": perf_dict["cycles"],
                                 "IPC": perf_dict["IPC"], "lmem reads": perf_dict["lmem reads"], "lmem writes": perf_dict["lmem writes"],
                                 "local memory requests": perf_dict["lmem reads"] + perf_dict["lmem writes"], "global memory requests": perf_dict["memory requests"],
                                 "time": perf_dict["time"],"error": error_message}])
@@ -127,15 +129,15 @@ def check_time_stats(data_frame: pd.DataFrame) -> int:
     error = stats.sem(t) + instr_error
     std = np.std(t, ddof=1)
 
+    print(f"Mean is {mean}")
+    print(f"Error is {error}")
+    print(f"Standard deviation is {std}")
     if pval1 <= 0.05:
         print(f"P-value in D'Agostino and Pearson's test is {pval1}, which is less than 0.05")
         return -1
     if pval2 <= 0.05:
         print(f"P-value in Shapiro-Wilk test is {pval2}, which is less than 0.05")
         return -1
-    print(f"Mean is {mean}")
-    print(f"Error is {error}")
-    print(f"Standard deviation is {std}")
     if std / mean > 0.05 * mean:
         print("Standard deviation is greater than 5 percents of mean")
         return -1
@@ -143,7 +145,7 @@ def check_time_stats(data_frame: pd.DataFrame) -> int:
     return 0
 
 
-if sys.argc > 1 and sys.argv(1) == "xrt" or sys.argv(1) == "fpga":
+if len(sys.argv) > 1 and (sys.argv[1] == "xrt" or sys.argv[1] == "fpga"):
     drivers = ["xrt"]
 else:
     drivers = ["simx", "rtlsim"]
@@ -182,9 +184,10 @@ stats3 = "time"
 
 mat_sizes = [32, 128] # square matrix sizes
 THREADS = 16
-WARPS = [mat_sizes[0] / (TILESIZE*TILESIZE), mat_sizes[1] / (TILESIZE*TILESIZE) ]
+WARPS = [int(mat_sizes[0] / (TILESIZE*TILESIZE)), int(mat_sizes[1] / (TILESIZE*TILESIZE)) ]
 CORES = 2
 PERFTYPE = 2 # 1 for cores info (stalls, fetches etc), 2 for memory info (lmem reads/writes etc)
+fpga_d = fpga_data()
 
 for n, W in zip(mat_sizes, WARPS):
     for driver in drivers:
@@ -203,18 +206,18 @@ for n, W in zip(mat_sizes, WARPS):
 
             C = CORES
             arch_p = arch(threads=T, cores=C, warps=W)
-            run_p = run(arch_p, kernel=kernel, driver=driver, msize=n, perf=PERFTYPE)
+            run_p = run(arch_p, kernel=kernel, driver=driver, msize=n, perf=PERFTYPE, fpga_data=fpga_d)
 
             # run kernel
             output_file = f"{output_dir}/output_{driver}_n{n}_{kernel}_TS{TILESIZE}_WPT{WORKPERTHREAD}_WID{WIDTH}_t{THREADS}w{W}_c{CORES}.txt"
             open(output_file, 'w').close()
-            for i in tqdm(range(0, TESTS_NUM - 1)):
+            for i in tqdm(range(TESTS_NUM)):
                 ret = runtest(run_p, output_file)
                 if ret:
                     sys.exit("Error occured when running latest command")
             # collect kernel statistics
             kernel_df = collect(run_p, output_file)
-            driver_dfs.append(df)
+            driver_dfs.append(kernel_df)
 
         # put different kernel statistics into one data frame
         df = pd.concat(driver_dfs, ignore_index=True)
@@ -233,5 +236,6 @@ for n, W in zip(mat_sizes, WARPS):
         f"{graphics_dir}/mem_graph_{driver}_n{n}_TS{TILESIZE}_WPT{WORKPERTHREAD}_WID{WIDTH}_t{THREADS}_w{W}_c{CORES}.png")
         draw(df, "kernel", stats2, "",  f"Instructions per cycle, {sim_type}",
         f"{graphics_dir}/ipc_graph_{driver}_n{n}_TS{TILESIZE}_WPT{WORKPERTHREAD}_WID{WIDTH}_t{THREADS}_w{W}_c{CORES}.png")
-        draw(df, "kernel", stats3, "",  f"Elapsed time, {sim_type}",
-        f"{graphics_dir}/time_graph_{driver}_n{n}_TS{TILESIZE}_WPT{WORKPERTHREAD}_WID{WIDTH}_t{THREADS}_w{W}_c{CORES}.png")
+        if driver == "xrt":
+            draw(df, "kernel", stats3, "",  f"Elapsed time, {sim_type}",
+            f"{graphics_dir}/time_graph_{driver}_n{n}_TS{TILESIZE}_WPT{WORKPERTHREAD}_WID{WIDTH}_t{THREADS}_w{W}_c{CORES}.png")
