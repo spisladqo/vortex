@@ -101,4 +101,4 @@ clean:
 	$(MAKE) -C kernel1 clean
 	$(MAKE) -C kernel2 clean
 	$(MAKE) -C kernel3 clean
-	$(MAKE) -C kernel4 clean	
+	$(MAKE) -C kernel4 clean

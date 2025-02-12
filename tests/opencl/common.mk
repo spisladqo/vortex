@@ -34,6 +34,7 @@ VX_CFLAGS  += -Xclang -target-feature -Xclang +zicond
 VX_CFLAGS  += -mllvm -disable-loop-idiom-all
 
 VX_CFLAGS  += -save-temps
+
 #VX_CFLAGS += -mllvm -vortex-branch-divergence=0
 #VX_CFLAGS += -mllvm -print-after-all
 
