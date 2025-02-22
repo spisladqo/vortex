@@ -35,6 +35,7 @@ path_to_vortex = Path.cwd().parent.parent.parent
 tile_size = 'TS'
 work_per_thread = 'WPT'
 width = 'WIDTH'
+tests_num = 'TESTS_NUM'
 
 def error_running (run_params: run, error_text: str) -> str:
     return f"error running in {run_params.kernel} : warps={run_params.arch.warps} cores={run_params.arch.cores} threads={run_params.arch.threads}" \
@@ -48,6 +49,7 @@ def create_common_h (params: dict, kernel_name: str):
     file_name = f"{path_to_vortex}/tests/opencl/{kernel_name}/common.h"
     with open(file_name, 'w') as file:
         file.write("#ifndef COMMON_H\n" + "#define COMMON_H\n" + "\n")
+        file.write("#define TESTS_NUM 100\n" + "\n")
         if tile_size in params:
             file.write(f"#define TS {params[tile_size]}\n")
         if work_per_thread in params:
@@ -153,21 +155,25 @@ else:
 TILESIZE = 4
 WORKPERTHREAD = 4
 WIDTH = 4
+TESTSNUM = 100
 
 # create common.h files for each kernel
 params1 = {
+    tests_num: TESTSNUM,
     tile_size: TILESIZE
 }
 create_common_h(params1, "kernel1")
 create_common_h(params1, "kernel2")
 
 params3 = {
+    tests_num: TESTSNUM,
     tile_size: TILESIZE,
     work_per_thread: WORKPERTHREAD
 }
 create_common_h(params3, "kernel3")
 
 params4 = {
+    tests_num: TESTSNUM,
     tile_size: TILESIZE,
     width: WIDTH 
 }
@@ -192,10 +198,6 @@ fpga_d = fpga_data()
 for n, W in zip(mat_sizes, WARPS):
     for driver in drivers:
         driver_dfs = []
-        if driver == "xrt":
-            TESTS_NUM = 30
-        else:
-            TESTS_NUM = 1
         for kernel in kernels:
             if kernel == "kernel3":
                 T = int(THREADS / WORKPERTHREAD)
@@ -211,10 +213,10 @@ for n, W in zip(mat_sizes, WARPS):
             # run kernel
             output_file = f"{output_dir}/output_{driver}_n{n}_{kernel}_TS{TILESIZE}_WPT{WORKPERTHREAD}_WID{WIDTH}_t{THREADS}w{W}_c{CORES}.txt"
             open(output_file, 'w').close()
-            for i in tqdm(range(TESTS_NUM)):
-                ret = runtest(run_p, output_file)
-                if ret:
-                    sys.exit("Error occured when running latest command")
+            # for i in tqdm(range(TESTSNUM)):
+            ret = runtest(run_p, output_file)
+            if ret:
+                sys.exit("Error occured when running latest command")
             # collect kernel statistics
             kernel_df = collect(run_p, output_file)
             driver_dfs.append(kernel_df)
@@ -226,7 +228,7 @@ for n, W in zip(mat_sizes, WARPS):
         elif driver == "rtlsim":
             sim_type = "RTL simulation"
         elif driver == "xrt":
-            sim_type == "Xilinx FPGA"
+            sim_type == "FPGA"
             ret = check_time_stats(df)
             if ret:
                 print("Normality tests haven't passed")

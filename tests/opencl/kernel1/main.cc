@@ -17,26 +17,26 @@ static void show_usage() {
   printf("Usage: [-M number of rows in first matrix] [-N number of columns in first matrix] [-K number of columns in first matrix and rows in second matrix] [-h: help]\n");
 }
 
-#define CL_CHECK(_expr)                                                        \
-  do {                                                                         \
-    cl_int _err = _expr;                                                       \
-    if (_err == CL_SUCCESS)                                                    \
-      break;                                                                   \
-    printf("OpenCL Error: '%s' returned %d!\n", #_expr, (int)_err);            \
-    cleanup();                                                                 \
-    exit(-1);                                                                  \
+#define CL_CHECK(_expr)                                             \
+  do {                                                              \
+    cl_int _err = _expr;                                            \
+    if (_err == CL_SUCCESS)                                         \
+      break;                                                        \
+    printf("OpenCL Error: '%s' returned %d!\n", #_expr, (int)_err); \
+    cleanup();                                                      \
+    exit(-1);                                                       \
   } while (0)
 
-#define CL_CHECK2(_expr)                                                       \
-  ({                                                                           \
-    cl_int _err = CL_INVALID_VALUE;                                            \
-    decltype(_expr) _ret = _expr;                                              \
-    if (_err != CL_SUCCESS) {                                                  \
-      printf("OpenCL Error: '%s' returned %d!\n", #_expr, (int)_err);          \
-      cleanup();                                                               \
-      exit(-1);                                                                \
-    }                                                                          \
-    _ret;                                                                      \
+#define CL_CHECK2(_expr)                                              \
+  ({                                                                  \
+    cl_int _err = CL_INVALID_VALUE;                                   \
+    decltype(_expr) _ret = _expr;                                     \
+    if (_err != CL_SUCCESS) {                                         \
+      printf("OpenCL Error: '%s' returned %d!\n", #_expr, (int)_err); \
+      cleanup();                                                      \
+      exit(-1);                                                       \
+    }                                                                 \
+    _ret;                                                             \
   })
 
 static int read_kernel_file(const char *filename, uint8_t **data,
@@ -179,12 +179,12 @@ int main(int argc, char **argv) {
   // create buffers
   a_memobj =
       CL_CHECK2(clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                     M * K * sizeof(float), A, &_err));
+                               M * K * sizeof(float), A, &_err));
   b_memobj =
       CL_CHECK2(clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                     N * K * sizeof(float), B, &_err));
+                               N * K * sizeof(float), B, &_err));
   c_memobj = CL_CHECK2(clCreateBuffer(context, CL_MEM_WRITE_ONLY,
-                                   M * N * sizeof(float), NULL, &_err));
+                                      M * N * sizeof(float), NULL, &_err));
 
   // load kernel text
   size_t kernel_size;
@@ -193,7 +193,7 @@ int main(int argc, char **argv) {
     return -1;
   }
   program = CL_CHECK2(clCreateProgramWithSource(context, 1, (const char **)&kernel_bin,
-                                      &kernel_size, &_err));
+                                                &kernel_size, &_err));
   if (program == NULL) {
     cleanup();
     return -1;
@@ -224,7 +224,6 @@ int main(int argc, char **argv) {
   }
   CL_CHECK(build_status);
 
-
   // set kernel arguments
   CL_CHECK(clSetKernelArg(kernel, 0, sizeof(int), &M));
   CL_CHECK(clSetKernelArg(kernel, 1, sizeof(int), &N));
@@ -233,46 +232,54 @@ int main(int argc, char **argv) {
   CL_CHECK(clSetKernelArg(kernel, 4, sizeof(cl_mem), (void *)&b_memobj));
   CL_CHECK(clSetKernelArg(kernel, 5, sizeof(cl_mem), (void *)&c_memobj));
 
-  // run kernel
-  const size_t local[2] = {TS, TS};
-  const size_t global[2] = {M, N};
-  printf("Execute the kernel\n");
-  auto time_start = std::chrono::high_resolution_clock::now();
-  CL_CHECK(clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global, local,
-                                  0, NULL, NULL));
-  CL_CHECK(clFinish(command_queue));
-  //CL_CHECK(clWaitForEvents(1, &event));
-  auto time_end = std::chrono::high_resolution_clock::now();
-  double elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                       time_end - time_start)
-                       .count();
-  printf("Elapsed time: %lg ms\n", elapsed);
-
-  // get results from VRAM
-  CL_CHECK(clEnqueueReadBuffer(command_queue, c_memobj, CL_TRUE, 0,
-                               M * N * sizeof(float), C, 0, NULL, NULL));
-  CL_CHECK(clFinish(command_queue));
-
-  // verify results
-  printf("Verify result\n");
+  // calculate matrices on CPU for later checks
   float *C_cpu = (float *)malloc(M * N * sizeof(float));
   if (C_cpu == NULL) {
-    printf("Not enough memory");
+    printf("Not enough memory for sgemm on CPU");
     cleanup();
     return -1;
   }
   sgemm_cpu(C_cpu, A, B, M, N, K);
+
+  // double times[TESTS_NUM] = {0};
+  const size_t local[2] = {TS, TS};
+  const size_t global[2] = {M, N};
   int errors = 0;
 
-  for (size_t i = 0; i < size_t(M * N); i++)
-    if (C_cpu[i] != C[i])
-      errors++;
-  if (errors != 0)
-    printf("FAILED! - %d errors\n", errors);
-  else
-    printf("PASSED!\n");
+  // run kernel TESTS_NUM times and verify results
+  for (int i = 0; i < TESTS_NUM; i++) {
+    errors = 0;
 
-  // free resureses
+    printf("Execute the kernel, iteration %d\n", i);
+    auto time_start = std::chrono::high_resolution_clock::now();
+    CL_CHECK(clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global, local,
+                                    0, NULL, NULL));
+    CL_CHECK(clFinish(command_queue));
+    // CL_CHECK(clWaitForEvents(1, &event));
+    auto time_end = std::chrono::high_resolution_clock::now();
+    double elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                         time_end - time_start)
+                         .count();
+    // times[i] = elapsed;
+    printf("Elapsed time: %lg ms\n", elapsed);
+
+    // get results from VRAM
+    CL_CHECK(clEnqueueReadBuffer(command_queue, c_memobj, CL_TRUE, 0,
+                                 M * N * sizeof(float), C, 0, NULL, NULL));
+    CL_CHECK(clFinish(command_queue));
+
+    // verify results
+    printf("Verify results\n");
+    for (size_t i = 0; i < size_t(M * N); i++)
+      if (C_cpu[i] != C[i])
+        errors++;
+    if (errors != 0)
+      printf("FAILED! - %d errors\n", errors);
+    else
+      printf("PASSED!\n");
+  }
+
+  // free resources
   cleanup();
   free(A);
   free(B);
