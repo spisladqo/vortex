@@ -25,11 +25,9 @@
 `ifdef SIMULATION
 
 `define STATIC_ASSERT(cond, msg) \
-generate \
     /* verilator lint_off GENUNNAMED */ \
     if (!(cond)) $error msg; \
     /* verilator lint_on GENUNNAMED */ \
-endgenerate
 
 `define ERROR(msg) \
     $error msg
@@ -103,7 +101,7 @@ endgenerate
 `define UNUSED_VAR(x)   /* verilator lint_off GENUNNAMED */ \
                         if (1) begin \
                             /* verilator lint_off UNUSED */ \
-                            wire [$bits(x)-1:0] __x = x; \
+                            wire [$bits(x)-1:0] __unused = x; \
                             /* verilator lint_on UNUSED */ \
                         end \
                         /* verilator lint_on GENUNNAMED */
@@ -159,7 +157,7 @@ endgenerate
 
 `ifdef QUARTUS
 `define MAX_FANOUT      8
-`define MAX_LUTRAM      1024
+`define FORCE_BRAM(d,w) (d >= 16 || w >= 128 || (d * w) >= 256)
 `define USE_BLOCK_BRAM  (* ramstyle = "block" *)
 `define USE_FAST_BRAM   (* ramstyle = "MLAB, no_rw_check" *)
 `define NO_RW_RAM_CHECK (* altera_attribute = "-name add_pass_through_logic_to_inferred_rams off" *)
@@ -170,7 +168,7 @@ endgenerate
 `define STRING          string
 `elsif VIVADO
 `define MAX_FANOUT      8
-`define MAX_LUTRAM      1024
+`define FORCE_BRAM(d,w) (d >= 16 || w >= 128 || (d * w) >= 256)
 `define USE_BLOCK_BRAM  (* ram_style = "block" *)
 `define USE_FAST_BRAM   (* ram_style = "distributed" *)
 `define NO_RW_RAM_CHECK (* rw_addr_collision = "no" *)
@@ -179,9 +177,12 @@ endgenerate
 `define PRESERVE_NET    (* keep = "true" *)
 `define BLACKBOX_CELL   (* black_box *)
 `define STRING
+`ifndef SIMULATION
+    `define ASYNC_BRAM_PATCH
+`endif
 `else
 `define MAX_FANOUT      8
-`define MAX_LUTRAM      1024
+`define FORCE_BRAM(d,w) (d >= 16 || w >= 128 || (d * w) >= 256)
 `define USE_BLOCK_BRAM
 `define USE_FAST_BRAM
 `define NO_RW_RAM_CHECK

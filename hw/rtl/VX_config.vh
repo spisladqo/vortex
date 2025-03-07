@@ -172,8 +172,26 @@
 `define L3_LINE_SIZE `MEM_BLOCK_SIZE
 `endif
 
-`ifndef PLATFORM_MEMORY_BANKS
-`define PLATFORM_MEMORY_BANKS 1
+// Platform memory parameters
+
+`ifndef PLATFORM_MEMORY_NUM_BANKS
+`define PLATFORM_MEMORY_NUM_BANKS 2
+`endif
+
+`ifndef PLATFORM_MEMORY_ADDR_WIDTH
+`ifdef XLEN_64
+    `define PLATFORM_MEMORY_ADDR_WIDTH 48
+`else
+    `define PLATFORM_MEMORY_ADDR_WIDTH 32
+`endif
+`endif
+
+`ifndef PLATFORM_MEMORY_DATA_SIZE
+`define PLATFORM_MEMORY_DATA_SIZE 64
+`endif
+
+`ifndef PLATFORM_MEMORY_INTERLEAVE
+`define PLATFORM_MEMORY_INTERLEAVE 1
 `endif
 
 `ifdef XLEN_64
@@ -241,7 +259,7 @@
 `ifndef IO_COUT_ADDR
 `define IO_COUT_ADDR    `IO_BASE_ADDR
 `endif
-`define IO_COUT_SIZE    `MEM_BLOCK_SIZE
+`define IO_COUT_SIZE    64
 
 `ifndef IO_MPM_ADDR
 `define IO_MPM_ADDR     (`IO_COUT_ADDR + `IO_COUT_SIZE)
@@ -580,6 +598,10 @@
 `define ICACHE_REPL_POLICY 1
 `endif
 
+`ifndef ICACHE_MEM_PORTS
+`define ICACHE_MEM_PORTS 1
+`endif
+
 // Dcache Configurable Knobs //////////////////////////////////////////////////
 
 // Cache Enable
@@ -652,9 +674,9 @@
 // Number of Memory Ports
 `ifndef L1_MEM_PORTS
 `ifdef L1_DISABLE
-`define L1_MEM_PORTS `MIN(DCACHE_NUM_REQS, `PLATFORM_MEMORY_BANKS)
+`define L1_MEM_PORTS `MIN(DCACHE_NUM_REQS, `PLATFORM_MEMORY_NUM_BANKS)
 `else
-`define L1_MEM_PORTS `MIN(`DCACHE_NUM_BANKS, `PLATFORM_MEMORY_BANKS)
+`define L1_MEM_PORTS `MIN(`DCACHE_NUM_BANKS, `PLATFORM_MEMORY_NUM_BANKS)
 `endif
 `endif
 
@@ -731,9 +753,9 @@
 // Number of Memory Ports
 `ifndef L2_MEM_PORTS
 `ifdef L2_ENABLE
-`define L2_MEM_PORTS `MIN(`L2_NUM_BANKS, `PLATFORM_MEMORY_BANKS)
+`define L2_MEM_PORTS `MIN(`L2_NUM_BANKS, `PLATFORM_MEMORY_NUM_BANKS)
 `else
-`define L2_MEM_PORTS `MIN(L2_NUM_REQS, `PLATFORM_MEMORY_BANKS)
+`define L2_MEM_PORTS `MIN(L2_NUM_REQS, `PLATFORM_MEMORY_NUM_BANKS)
 `endif
 `endif
 
@@ -792,9 +814,9 @@
 // Number of Memory Ports
 `ifndef L3_MEM_PORTS
 `ifdef L3_ENABLE
-`define L3_MEM_PORTS `MIN(`L3_NUM_BANKS, `PLATFORM_MEMORY_BANKS)
+`define L3_MEM_PORTS `MIN(`L3_NUM_BANKS, `PLATFORM_MEMORY_NUM_BANKS)
 `else
-`define L3_MEM_PORTS `MIN(L3_NUM_REQS, `PLATFORM_MEMORY_BANKS)
+`define L3_MEM_PORTS `MIN(L3_NUM_REQS, `PLATFORM_MEMORY_NUM_BANKS)
 `endif
 `endif
 
