@@ -242,8 +242,8 @@ int main(int argc, char **argv) {
   sgemm_cpu(C_cpu, A, B, M, N, K);
 
   // double times[TESTS_NUM] = {0};
-  const size_t local[2] = {TS, TS};
-  const size_t global[2] = {M, N};
+  const size_t local[2] = {TS, TS/WPT};
+  const size_t global[2] = {M, N/WPT};
   int errors = 0;
 
   // run kernel TESTS_NUM times and verify results
