@@ -190,7 +190,7 @@ stats3 = "time"
 
 mat_sizes = [32, 128] # square matrix sizes
 THREADS = 16
-WARPS = [int(mat_sizes[0] / (TILESIZE*TILESIZE)), int(mat_sizes[1] / (TILESIZE*TILESIZE)) ]
+WARPS = 2
 CORES = 2
 PERFTYPE = 2 # 1 for cores info (stalls, fetches etc), 2 for memory info (lmem reads/writes etc)
 fpga_d = fpga_data()
