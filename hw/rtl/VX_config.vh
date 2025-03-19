@@ -200,6 +200,10 @@
 `define STACK_BASE_ADDR 64'h1FFFF0000
 `endif
 
+`ifndef LMEM_LOG_SIZE
+`define LMEM_LOG_SIZE   14
+`endif
+
 `ifndef STARTUP_ADDR
 `define STARTUP_ADDR    64'h080000000
 `endif
@@ -223,6 +227,10 @@
 
 `ifndef STACK_BASE_ADDR
 `define STACK_BASE_ADDR 32'hFFFF0000
+`endif
+
+`ifndef LMEM_BASE_ADDR
+`define LMEM_BASE_ADDR  `STACK_BASE_ADDR
 `endif
 
 `ifndef STARTUP_ADDR
@@ -254,6 +262,10 @@
 
 `ifndef LMEM_BASE_ADDR
 `define LMEM_BASE_ADDR  `STACK_BASE_ADDR
+`endif
+
+`ifndef NEW_STACK_BASE_ADDR
+`define NEW_STACK_BASE_ADDR `LMEM_BASE_ADDR + (`XLEN'(1 << `LMEM_LOG_SIZE))
 `endif
 
 `ifndef IO_COUT_ADDR

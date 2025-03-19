@@ -2,7 +2,6 @@ import subprocess
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
 import pandas as pd
-from tqdm import tqdm
 from pathlib import Path
 import re
 import sys
@@ -16,7 +15,7 @@ class arch:
     cores: int
     threads: int
 @dataclass
-# fpga parameters
+# fpga parameters (CHANGE HERE)
 class fpga_data:
     platform = "xilinx_u50_gen3x16_xdma_5_202210_1"
     dirpref = "test1"
@@ -31,7 +30,7 @@ class run:
     driver: str
     msize: int
 
-path_to_vortex = Path.cwd().parent.parent.parent
+path_to_vortex = Path.cwd().parent
 tile_size = 'TS'
 work_per_thread = 'WPT'
 width = 'WIDTH'
@@ -49,7 +48,7 @@ def create_common_h (params: dict, kernel_name: str):
     file_name = f"{path_to_vortex}/tests/opencl/{kernel_name}/common.h"
     with open(file_name, 'w') as file:
         file.write("#ifndef COMMON_H\n" + "#define COMMON_H\n" + "\n")
-        file.write("#define TESTS_NUM 100\n" + "\n")
+        file.write(f"#define TESTS_NUM {params[tests_num]}\n" + "\n")
         if tile_size in params:
             file.write(f"#define TS {params[tile_size]}\n")
         if work_per_thread in params:
@@ -93,7 +92,7 @@ def collect(run_params: run, path_to_output_file: str) -> pd.DataFrame:
                 for key, value in matches:
                     perf_dict[key] = float(value)
         elif line.startswith("Elapsed time:"):
-            matches = re.findall(r'(\S+)\s*[:]\s*(\d+)', line) # matches time: 1234
+            matches = re.findall(r'(\S+)\s*[:]\s*(\d+)', line) # matches "time: 1234 ms"
             for key, value in matches:
                 perf_dict[key] = float(value)
         # check for errors
@@ -105,7 +104,8 @@ def collect(run_params: run, path_to_output_file: str) -> pd.DataFrame:
     # parse string with perf statistic of running kernel
     if perf_dict["cycles"] <= 0:
         error_message = error_running(run_params, "Invalid number of cycles")
-    # write result to data frame
+    # (ADD MORE IF NEEDED)
+    #  write result to data frame
     run_result = pd.DataFrame([{"kernel": run_params.kernel[-1], "driver": run_params.driver, "cores": run_params.arch.cores,
                                 "warps": run_params.arch.warps, "threads": run_params.arch.threads, "n": run_params.msize,
                                 "instrs": perf_dict["instrs"], "cycles": perf_dict["cycles"],
@@ -181,9 +181,9 @@ create_common_h(params4, "kernel4")
 
 kernels = ["kernel1", "kernel2", "kernel3"]
 
-j_stat_dir = f"{path_to_vortex}/tests/opencl/j_stat"
-output_dir = f"{j_stat_dir}/outputs"
-graphics_dir = f"{j_stat_dir}/graphics"
+experiment_dir = f"{path_to_vortex}/for_experiments"
+output_dir = f"{experiment_dir}/outputs"
+graphics_dir = f"{experiment_dir}/graphics"
 stats1 = ["local memory requests", "global memory requests"]
 stats2 = "IPC"
 stats3 = "time"
@@ -192,7 +192,8 @@ mat_sizes = [32, 128] # square matrix sizes
 THREADS = 16
 WARPS = 2
 CORES = 2
-PERFTYPE = 2 # 1 for cores info (stalls, fetches etc), 2 for memory info (lmem reads/writes etc)
+# 0 for nothing, 1 for cores info (stalls, fetches etc), 2 for memory info (lmem reads/writes etc)
+PERFTYPE = 2
 fpga_d = fpga_data()
 
 for n, W in zip(mat_sizes, WARPS):
@@ -213,7 +214,6 @@ for n, W in zip(mat_sizes, WARPS):
             # run kernel
             output_file = f"{output_dir}/output_{driver}_n{n}_{kernel}_TS{TILESIZE}_WPT{WORKPERTHREAD}_WID{WIDTH}_t{THREADS}w{W}_c{CORES}.txt"
             open(output_file, 'w').close()
-            # for i in tqdm(range(TESTSNUM)):
             ret = runtest(run_p, output_file)
             if ret:
                 sys.exit("Error occured when running latest command")
